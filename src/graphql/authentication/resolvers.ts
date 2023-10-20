@@ -4,8 +4,10 @@ import db, { genId } from '../../modules/db';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt'
 import { DateTime } from 'luxon'
+import jwt from 'jsonwebtoken'
+import invariant from 'invariant'
 
-const SALT_ROUNDS = process.env.NODE_ENV === 'test' ? 1 : 10;
+const SALT_ROUNDS = process.env.NODE_ENV === 'development' ? 1 : 10;
 
 const authResolvers: GqlResolvers = {
   Mutation: {
@@ -26,15 +28,54 @@ const authResolvers: GqlResolvers = {
           expiresAt: DateTime.now().plus({minutes: 10}).toJSDate()
         }});
 
-        // Send token to user - email for actual use
+        // Send token to user - adjust depending on project
         if (process.env.NODE_ENV === 'development') {
-          console.log('Token: ', token)
+          console.log('Token: ', token);
         }
 
 
         return {success: true}
      },
-    // signIn: () => {},
+     
+    signUp: async (_, {email, token, password}) => {
+
+      
+      const request = await db.signUpRequest.findUnique({where: {email}})
+      if (!request) throw new GraphQLError('Sign up request not found');
+      if (request.redeemedAt || request.expiresAt < new Date())
+      throw new GraphQLError('Sign up request expired');
+    
+      // compare token with tokenHash
+      const validToken = await bcrypt.compare(token, request.tokenHash);
+      if (!validToken) throw new GraphQLError('Invalid token');
+
+      // check for existing user
+      const existingUser = await db.user.findUnique({ where: {email}});
+      if (existingUser) throw new GraphQLError('User already exists');
+    
+      // create user
+      const [user] = await db.$transaction([
+        db.user.create({ 
+          data: {
+            id: genId(),
+            email, 
+            passwordHash: await bcrypt.hash(password, SALT_ROUNDS)
+          }
+        }),
+        db.signUpRequest.update({
+          where: {id: request.id },
+          data: {redeemedAt: new Date()}
+        })
+      ])
+
+
+
+      //generate auth token with JWT
+      invariant(process.env.JWT_SECRET, 'JWT_SECRET not set');
+      const authToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
+
+      return { authToken }
+    },
     // signUp: () => {},
   },
 };
