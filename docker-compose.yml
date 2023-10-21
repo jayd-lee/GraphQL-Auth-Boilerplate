@@ -25,4 +25,5 @@ services:
       DATABASE_URL: ${DOCKER_COMPOSE_DATABASE}
       NODE_ENV: development
       JWT_SECRET: very-secret-key
+      JWT_EXPIRES_IN: 90d
       PORT: 5001

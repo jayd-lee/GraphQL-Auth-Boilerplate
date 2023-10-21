@@ -4,8 +4,6 @@ import db, { genId } from '../../modules/db';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcrypt'
 import { DateTime } from 'luxon'
-import jwt from 'jsonwebtoken'
-import invariant from 'invariant'
 import Auth from '../../modules/auth';
 
 const SALT_ROUNDS = process.env.NODE_ENV === 'development' ? 1 : 10;
