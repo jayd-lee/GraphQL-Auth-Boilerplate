@@ -6,6 +6,7 @@ import bcrypt from 'bcrypt'
 import { DateTime } from 'luxon'
 import jwt from 'jsonwebtoken'
 import invariant from 'invariant'
+import Auth from '../../modules/auth';
 
 const SALT_ROUNDS = process.env.NODE_ENV === 'development' ? 1 : 10;
 
@@ -40,10 +41,10 @@ const authResolvers: GqlResolvers = {
     signUp: async (_, {email, token, password}) => {
 
       
-      const request = await db.signUpRequest.findUnique({where: {email}})
+      const request = await db.signUpRequest.findUnique({where: {email}});
       if (!request) throw new GraphQLError('Sign up request not found');
       if (request.redeemedAt || request.expiresAt < new Date())
-      throw new GraphQLError('Sign up request expired');
+                    throw new GraphQLError('Sign up request expired');
     
       // compare token with tokenHash
       const validToken = await bcrypt.compare(token, request.tokenHash);
@@ -68,15 +69,21 @@ const authResolvers: GqlResolvers = {
         })
       ])
 
-
-
       //generate auth token with JWT
-      invariant(process.env.JWT_SECRET, 'JWT_SECRET not set');
-      const authToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET);
 
-      return { authToken }
+      return { authToken: Auth.createAuthToken(user) }
     },
-    // signUp: () => {},
+    signIn: async (_, {email, password}) => {
+      const user = await db.user.findUnique({ where: { email }})
+      if (!user) throw new GraphQLError('Email/password combination is invalid')
+
+      // verify password
+      const validPassword = await bcrypt.compare(password, user.passwordHash)
+      if (!validPassword) throw new GraphQLError('Email/password combination is invalid')
+
+      return { authToken: Auth.createAuthToken(user) }
+      
+    },
   },
 };
 
